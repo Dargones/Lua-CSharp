@@ -62,4 +62,14 @@ public class TableTests
         Assert.That(table[1], Is.EqualTo(new LuaValue(0)));
         Assert.That(table[int.MaxValue - 1], Is.EqualTo(new LuaValue(0)));
     }
+
+    [Test]
+    public void Test_TableResizeLarge() {
+        var table = new LuaTable();
+        var expectedLength = 1 << 13;
+        for (var i = expectedLength; i > 0; i--) {
+            table[i] = i;
+        }
+        Assert.That(table.ArrayLength, Is.EqualTo(expectedLength));
+    }    
 }
