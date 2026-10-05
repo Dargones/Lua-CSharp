@@ -73,11 +73,7 @@ public sealed class LuaTable : IEnumerable<KeyValuePair<LuaValue, LuaValue>>
 
                     if (0 < index && index < MaxArraySize && index <= Math.Max(array.Length * 2, 8))
                     {
-                        if (array.Length < index)
-                        {
-                            EnsureArrayCapacity(index);
-                        }
-
+                        EnsureArrayCapacity(index);
                         array[index - 1] = value;
                         return;
                     }
@@ -190,16 +186,10 @@ public sealed class LuaTable : IEnumerable<KeyValuePair<LuaValue, LuaValue>>
         }
 
         var arrayIndex = index - 1;
-        var distance = index - array.Length;
-        if (distance > MaxDistance)
-        {
-            dictionary[index] = value;
-            return;
-        }
 
-        if (index > array.Length || array[^1].Type != LuaValueType.Nil)
+        if (index >= array.Length || array.Length < 2 || array[^1].Type != LuaValueType.Nil || array[^2].Type != LuaValueType.Nil)
         {
-            EnsureArrayCapacity(array.Length + 1);
+            EnsureArrayCapacity(array.Length + 1, 1);
         }
 
         if (arrayIndex != array.Length - 1)
@@ -273,15 +263,21 @@ public sealed class LuaTable : IEnumerable<KeyValuePair<LuaValue, LuaValue>>
         return array.AsSpan();
     }
 
-    internal void EnsureArrayCapacity(int newCapacity)
+    internal void EnsureArrayCapacity(int newCapacity, int padding = 0)
     {
-        if (array.Length >= newCapacity)
+        var requiredArrayCapacity = Math.Max(array.Length, newCapacity);
+        while (dictionary.TryGetValue(requiredArrayCapacity + 1, out var dictionaryValue) && dictionaryValue.Type is not LuaValueType.Nil) 
+        {
+            requiredArrayCapacity++;
+        }
+        requiredArrayCapacity = Math.Min(requiredArrayCapacity + padding, MaxArraySize);
+        if (array.Length >= requiredArrayCapacity)
         {
             return;
         }
 
         var prevLength = array.Length;
-        var newLength = newCapacity <= 8 ? 8 : MathEx.NextPowerOfTwo(newCapacity);
+        var newLength = requiredArrayCapacity <= 8 ? 8 : MathEx.NextPowerOfTwo(requiredArrayCapacity);
 
         Array.Resize(ref array, newLength);
 
