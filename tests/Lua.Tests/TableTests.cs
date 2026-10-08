@@ -63,13 +63,14 @@ public class TableTests
         Assert.That(table[int.MaxValue - 1], Is.EqualTo(new LuaValue(0)));
     }
 
+    private const int LargePowerOfTwo = 1 << 13;
+
     [Test]
     public void Test_TableContains_LargeIntegerKey()
     {
         var table = new LuaTable();
-        var largeIntegerKey = 1 << 13;
-        table[largeIntegerKey] = 1;
-        Assert.That(table.ContainsKey(largeIntegerKey));
+        table[LargePowerOfTwo] = 1;
+        Assert.That(table.ContainsKey(LargePowerOfTwo));
     }
 
     [Test]
@@ -78,5 +79,64 @@ public class TableTests
         var table = new LuaTable();
         table[1] = 0;
         Assert.Throws<IndexOutOfRangeException>(() => table.Insert(3, 0));
+    }
+
+    [Test]
+    public void Test_Indexer_AddKeysInReverseOrder()
+    {
+        var table = new LuaTable();
+        for (var i = LargePowerOfTwo; i > 0; i--)
+        {
+            table[i] = 0;
+        }
+        Assert.That(table.ArrayLength, Is.EqualTo(LargePowerOfTwo));
+    }
+
+    [Test]
+    public void Test_TableInsert_ResizeArrayWhenReplacingTrailingNil()
+    {
+        var table = new LuaTable();
+        table[LargePowerOfTwo + 1] = 0;
+        for (var i = 1; i < LargePowerOfTwo; i++)
+        {
+            table.Insert(1, 0);
+        }
+        table.Insert(LargePowerOfTwo, LargePowerOfTwo);
+        Assert.That(table.ArrayLength, Is.EqualTo(LargePowerOfTwo + 1));
+    }
+
+    [Test]
+    public void Test_TableInsert_ResizeArrayWhenInsertShiftsANonNilValueInPlaceOfTrailingNil()
+    {
+        var table = new LuaTable();
+        table[LargePowerOfTwo + 1] = 0;
+        for (var i = 1; i <= LargePowerOfTwo; i++)
+        {
+            table.Insert(1, 0);
+        }
+        Assert.That(table.ArrayLength, Is.EqualTo(LargePowerOfTwo + 1));
+    }
+
+    [Test]
+    public void Test_TableInsert_EnsureValuesAfterFirstNilAreNotShifted()
+    {
+        var table = new LuaTable();
+        table[1] = 1;
+        table[3] = 3;
+        table.Insert(2, 2);
+        Assert.That(table[3].Read<int>(), Is.EqualTo(3));
+    }
+
+    [Test]
+    public void Test_TableInsert_EnsureValuesAfterFirstNilAtTheEndOfTheArrayAreNotShifted()
+    {
+        var table = new LuaTable();
+        table[32] = 32;
+        for (var i = 16; i > 0; i--)
+        {
+            table[i] = 0;
+        }
+        table.Insert(1, 0);
+        Assert.That(table[32].Read<int>(), Is.EqualTo(32));
     }
 }
