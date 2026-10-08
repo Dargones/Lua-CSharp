@@ -73,11 +73,7 @@ public sealed class LuaTable : IEnumerable<KeyValuePair<LuaValue, LuaValue>>
 
                     if (0 < index && index < MaxArraySize && index <= Math.Max(array.Length * 2, 8))
                     {
-                        if (array.Length < index)
-                        {
-                            EnsureArrayCapacity(index);
-                        }
-
+                        EnsureArrayCapacity(index);
                         array[index - 1] = value;
                         return;
                     }
@@ -184,21 +180,27 @@ public sealed class LuaTable : IEnumerable<KeyValuePair<LuaValue, LuaValue>>
 
     public void Insert(int index, LuaValue value)
     {
-        if (index <= 0 || index > ArrayLength + 1)
+        var luaArrayLength = ArrayLength;
+        if (index <= 0 || index > luaArrayLength + 1)
         {
             throw new IndexOutOfRangeException();
         }
 
-        if (index > array.Length || array[^1].Type != LuaValueType.Nil)
+        if (
+            index >= array.Length
+            || array.Length < 2
+            || array[^1].Type != LuaValueType.Nil
+            || array[^2].Type != LuaValueType.Nil
+        )
         {
             EnsureArrayCapacity(array.Length + 1);
         }
 
         var arrayIndex = index - 1;
-        if (arrayIndex != array.Length - 1)
+        if (arrayIndex < luaArrayLength)
         {
             array
-                .AsSpan(arrayIndex, array.Length - arrayIndex - 1)
+                .AsSpan(arrayIndex, luaArrayLength - arrayIndex)
                 .CopyTo(array.AsSpan(arrayIndex + 1));
         }
 
@@ -268,6 +270,15 @@ public sealed class LuaTable : IEnumerable<KeyValuePair<LuaValue, LuaValue>>
 
     internal void EnsureArrayCapacity(int newCapacity)
     {
+        newCapacity = Math.Max(array.Length, newCapacity);
+        while (
+            dictionary.TryGetValue(newCapacity + 1, out var dictionaryValue)
+            && dictionaryValue.Type is not LuaValueType.Nil
+        )
+        {
+            newCapacity++;
+        }
+        newCapacity = Math.Min(newCapacity, MaxArraySize);
         if (array.Length >= newCapacity)
         {
             return;
