@@ -189,19 +189,12 @@ public sealed class LuaTable : IEnumerable<KeyValuePair<LuaValue, LuaValue>>
             throw new IndexOutOfRangeException();
         }
 
-        var arrayIndex = index - 1;
-        var distance = index - array.Length;
-        if (distance > MaxDistance)
-        {
-            dictionary[index] = value;
-            return;
-        }
-
         if (index > array.Length || array[^1].Type != LuaValueType.Nil)
         {
             EnsureArrayCapacity(array.Length + 1);
         }
 
+        var arrayIndex = index - 1;
         if (arrayIndex != array.Length - 1)
         {
             array
