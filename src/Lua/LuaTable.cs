@@ -184,7 +184,7 @@ public sealed class LuaTable : IEnumerable<KeyValuePair<LuaValue, LuaValue>>
 
     public void Insert(int index, LuaValue value)
     {
-        if (index <= 0 || index > array.Length + 1)
+        if (index <= 0 || index > ArrayLength + 1)
         {
             throw new IndexOutOfRangeException();
         }

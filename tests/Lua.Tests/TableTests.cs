@@ -71,4 +71,12 @@ public class TableTests
         table[largeIntegerKey] = 1;
         Assert.That(table.ContainsKey(largeIntegerKey));
     }
+
+    [Test]
+    public void Test_TableInsert_IndexOutOfRange()
+    {
+        var table = new LuaTable();
+        table[1] = 0;
+        Assert.Throws<IndexOutOfRangeException>(() => table.Insert(3, 0));
+    }
 }
