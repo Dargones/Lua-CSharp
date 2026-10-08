@@ -62,4 +62,13 @@ public class TableTests
         Assert.That(table[1], Is.EqualTo(new LuaValue(0)));
         Assert.That(table[int.MaxValue - 1], Is.EqualTo(new LuaValue(0)));
     }
+
+    [Test]
+    public void Test_TableContains_LargeIntegerKey()
+    {
+        var table = new LuaTable();
+        var largeIntegerKey = 1 << 13;
+        table[largeIntegerKey] = 1;
+        Assert.That(table.ContainsKey(largeIntegerKey));
+    }
 }

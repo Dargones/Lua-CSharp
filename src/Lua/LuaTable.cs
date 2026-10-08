@@ -159,9 +159,9 @@ public sealed class LuaTable : IEnumerable<KeyValuePair<LuaValue, LuaValue>>
             return false;
         }
 
-        if (TryGetInteger(key, out var index))
+        if (TryGetInteger(key, out var index) && index > 0 && index <= array.Length)
         {
-            return index > 0 && index <= array.Length && array[index - 1].Type != LuaValueType.Nil;
+            return array[index - 1].Type != LuaValueType.Nil;
         }
 
         return dictionary.TryGetValue(key, out var value) && value.Type is not LuaValueType.Nil;
