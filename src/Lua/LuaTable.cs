@@ -270,15 +270,15 @@ public sealed class LuaTable : IEnumerable<KeyValuePair<LuaValue, LuaValue>>
 
     internal void EnsureArrayCapacity(int newCapacity)
     {
-        newCapacity = Math.Max(array.Length, newCapacity);
+        newCapacity = Math.Min(Math.Max(array.Length, newCapacity), MaxArraySize);
         while (
-            dictionary.TryGetValue(newCapacity + 1, out var dictionaryValue)
+            newCapacity < MaxArraySize
+            && dictionary.TryGetValue(newCapacity + 1, out var dictionaryValue)
             && dictionaryValue.Type is not LuaValueType.Nil
         )
         {
             newCapacity++;
         }
-        newCapacity = Math.Min(newCapacity, MaxArraySize);
         if (array.Length >= newCapacity)
         {
             return;
