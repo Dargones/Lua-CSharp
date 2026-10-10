@@ -16,6 +16,12 @@ public sealed class LuaTable : IEnumerable<KeyValuePair<LuaValue, LuaValue>>
     }
 
     LuaValue[] array;
+
+    // A known non-nil prefix lets repeated appends avoid scanning from the beginning.
+    int knownArrayPrefixLength;
+
+    // Writable views may be retained; only replacing the backing array makes caching safe again.
+    bool hasWritableArrayReferences;
     readonly LuaValueDictionary dictionary;
     LuaTable? metatable;
 
@@ -73,8 +79,15 @@ public sealed class LuaTable : IEnumerable<KeyValuePair<LuaValue, LuaValue>>
 
                     if (0 < index && index < MaxArraySize && index <= Math.Max(array.Length * 2, 8))
                     {
-                        EnsureArrayCapacity(index);
+                        if (index >= array.Length)
+                        {
+                            EnsureArrayCapacity(index);
+                        }
                         array[index - 1] = value;
+                        if (value.Type is LuaValueType.Nil && index <= knownArrayPrefixLength)
+                        {
+                            knownArrayPrefixLength = index - 1;
+                        }
                         return;
                     }
                 }
@@ -90,14 +103,23 @@ public sealed class LuaTable : IEnumerable<KeyValuePair<LuaValue, LuaValue>>
     {
         get
         {
-            for (var i = 0; i < array.Length; i++)
+            var start = hasWritableArrayReferences ? 0 : knownArrayPrefixLength;
+            for (var i = start; i < array.Length; i++)
             {
                 if (array[i].Type is LuaValueType.Nil)
                 {
+                    if (!hasWritableArrayReferences)
+                    {
+                        knownArrayPrefixLength = i;
+                    }
                     return i;
                 }
             }
 
+            if (!hasWritableArrayReferences)
+            {
+                knownArrayPrefixLength = array.Length;
+            }
             return array.Length;
         }
     }
@@ -141,6 +163,7 @@ public sealed class LuaTable : IEnumerable<KeyValuePair<LuaValue, LuaValue>>
         {
             if (index > 0 && index <= array.Length)
             {
+                hasWritableArrayReferences = true;
                 return ref array[index - 1];
             }
         }
@@ -174,6 +197,7 @@ public sealed class LuaTable : IEnumerable<KeyValuePair<LuaValue, LuaValue>>
         }
 
         array[^1] = default;
+        knownArrayPrefixLength = Math.Min(knownArrayPrefixLength, arrayIndex);
 
         return value;
     }
@@ -205,6 +229,11 @@ public sealed class LuaTable : IEnumerable<KeyValuePair<LuaValue, LuaValue>>
         }
 
         array[arrayIndex] = value;
+        if (!hasWritableArrayReferences)
+        {
+            knownArrayPrefixLength =
+                value.Type is LuaValueType.Nil ? arrayIndex : luaArrayLength + 1;
+        }
     }
 
     public bool TryGetNext(LuaValue key, out KeyValuePair<LuaValue, LuaValue> pair)
@@ -256,15 +285,18 @@ public sealed class LuaTable : IEnumerable<KeyValuePair<LuaValue, LuaValue>>
     {
         array.AsSpan().Clear();
         dictionary.Clear();
+        knownArrayPrefixLength = 0;
     }
 
     public Memory<LuaValue> GetArrayMemory()
     {
+        hasWritableArrayReferences = true;
         return array.AsMemory();
     }
 
     public Span<LuaValue> GetArraySpan()
     {
+        hasWritableArrayReferences = true;
         return array.AsSpan();
     }
 
@@ -288,6 +320,12 @@ public sealed class LuaTable : IEnumerable<KeyValuePair<LuaValue, LuaValue>>
         var newLength = newCapacity <= 8 ? 8 : MathEx.NextPowerOfTwo(newCapacity);
 
         Array.Resize(ref array, newLength);
+        if (hasWritableArrayReferences)
+        {
+            // Retained views only refer to the old array after a resize.
+            knownArrayPrefixLength = 0;
+            hasWritableArrayReferences = false;
+        }
 
         using PooledList<(int, LuaValue)> indexList = new(dictionary.Count);
 
