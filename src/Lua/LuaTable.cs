@@ -17,10 +17,12 @@ public sealed class LuaTable : IEnumerable<KeyValuePair<LuaValue, LuaValue>>
 
     LuaValue[] array;
 
-    // A known non-nil prefix lets repeated appends avoid scanning from the beginning.
+    // A lower bound on the non-nil prefix, not a cached table length. Reusing it
+    // avoids rescanning earlier elements on append; nil writes and moves may shorten it.
     int knownArrayPrefixLength;
 
-    // Writable views may be retained; only replacing the backing array makes caching safe again.
+    // Callers can retain a Span, Memory or ref and mutate the array without updating the prefix.
+    // Once exposed, length queries use a linear scan until the backing array is replaced.
     bool hasWritableArrayReferences;
     readonly LuaValueDictionary dictionary;
     LuaTable? metatable;
@@ -79,6 +81,9 @@ public sealed class LuaTable : IEnumerable<KeyValuePair<LuaValue, LuaValue>>
 
                     if (0 < index && index < MaxArraySize && index <= Math.Max(array.Length * 2, 8))
                     {
+                        // Include the last slot: consecutive keys beyond the array may already
+                        // be in the hash part and must be brought into the array. Interior writes
+                        // do not need this hash lookup.
                         if (index >= array.Length)
                         {
                             EnsureArrayCapacity(index);
@@ -103,6 +108,8 @@ public sealed class LuaTable : IEnumerable<KeyValuePair<LuaValue, LuaValue>>
     {
         get
         {
+            // Lua 5.2 leaves the length of tables with holes undefined. Finding the first nil
+            // is this implementation's choice, not an additional Lua-facing guarantee.
             var start = hasWritableArrayReferences ? 0 : knownArrayPrefixLength;
             for (var i = start; i < array.Length; i++)
             {
@@ -286,6 +293,7 @@ public sealed class LuaTable : IEnumerable<KeyValuePair<LuaValue, LuaValue>>
         array.AsSpan().Clear();
         dictionary.Clear();
         knownArrayPrefixLength = 0;
+        // Keep hasWritableArrayReferences: Clear does not detach retained writable views.
     }
 
     public Memory<LuaValue> GetArrayMemory()
@@ -322,7 +330,8 @@ public sealed class LuaTable : IEnumerable<KeyValuePair<LuaValue, LuaValue>>
         Array.Resize(ref array, newLength);
         if (hasWritableArrayReferences)
         {
-            // Retained views only refer to the old array after a resize.
+            // Retained views now refer only to the old array. Recompute the prefix because
+            // values copied from that array may have been changed through those views.
             knownArrayPrefixLength = 0;
             hasWritableArrayReferences = false;
         }
